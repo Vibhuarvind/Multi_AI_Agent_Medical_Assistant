@@ -1,0 +1,11 @@
+pharmacy_id,sku,drug_name,form,strength,price,qty
+ph001,SKU001,Paracetamol,Tablet,500mg,20,100
+ph001,SKU002,Ibuprofen,Tablet,200mg,35,50
+ph001,SKU003,Amoxicillin,Capsule,250mg,45,30
+ph002,SKU004,Cetirizine,Tablet,10mg,25,80
+ph002,SKU005,Ranitidine,Syrup,150mg/5ml,50,20
+ph003,SKU006,Aspirin,Tablet,75mg,15,60
+ph003,SKU007,Metformin,Tablet,500mg,30,40
+ph004,SKU008,Loratadine,Tablet,10mg,20,70
+ph004,SKU009,Azithromycin,Tablet,500mg,60,25
+ph004,SKU010,Diclofenac,Gel,1%,100,15

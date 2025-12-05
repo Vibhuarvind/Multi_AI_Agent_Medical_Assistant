@@ -1,0 +1,34 @@
+[
+  {
+    "id": "ph001",
+    "Name": "MedQuick Andheri",
+    "lat": 19.12,
+    "lon": 72.84,
+    "services": ["24x7", "delivery"],
+    "delivery_km": 12
+  },
+  {
+    "id": "ph002",
+    "Name": "HealthPlus Bandra",
+    "lat": 19.06,
+    "lon": 72.83,
+    "services": ["delivery"],
+    "delivery_km": 8
+  },
+  {
+    "id": "ph003",
+    "Name": "WellCare Malad",
+    "lat": 19.17,
+    "lon": 72.85,
+    "services": ["24x7"],
+    "delivery_km": 10
+  },
+  {
+    "id": "ph004",
+    "Name": "QuickMeds Goregaon",
+    "lat": 19.16,
+    "lon": 72.86,
+    "services": ["24x7", "delivery"],
+    "delivery_km": 15
+  }
+]

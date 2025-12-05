@@ -1,0 +1,9 @@
+sku,drug_name,indication,age_min,contra_allergy_keywords
+SKU001,Paracetamol,Fever & Pain,2,Paracetamol
+SKU002,Ibuprofen,Pain & Inflammation,6,Ibuprofen
+SKU003,Cetirizine,Allergic Rhinitis,2,Cetirizine
+SKU004,Antacid Tablets,Acid Reflux,5,Aluminium Hydroxide
+SKU005,Loperamide,Diarrhea,12,Loperamide
+SKU006,Saline Nasal Spray,Nasal Congestion,0,None
+SKU007,Hydrocortisone Cream,Itching & Rashes,2,Hydrocortisone
+SKU008,Oral Rehydration Salt (ORS),Dehydration,0,None

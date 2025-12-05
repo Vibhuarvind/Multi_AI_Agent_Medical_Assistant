@@ -1,0 +1,5 @@
+drug_a,drug_b,level,note
+Paracetamol,Ibuprofen,Moderate,May increase liver enzyme risk
+Cetirizine,Loperamide,Low,Generally safe but monitor patient
+Ranitidine,Metformin,High,May alter drug absorption
+Aspirin,Ibuprofen,High,May reduce antiplatelet effect
