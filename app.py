@@ -1,40 +1,78 @@
-# app.py
 import streamlit as st
+from Agents.ingestion import IngestionAgent
 
-st.set_page_config(page_title="Customer Intake Form", page_icon="💊")
+st.set_page_config(page_title="Multi AI Agent Health Assistant", page_icon="🩺")
 
 st.title("🩺 Multi AI Agent Health Assistant")
 
-# --- Customer Info ---
+# Customer Information
 st.header("Personal Details")
 name = st.text_input("Name")
-age = st.number_input("Age", min_value=0, max_value=120)
+age = st.number_input("Age", min_value=0, max_value=100)
 phone = st.text_input("Phone Number")
 gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+allergies = st.text_input("Any Known Allergies (Optional)", placeholder="e.g., penicillin, aspirin, ibuprofen")
 
-# --- Inputs: Symptoms / PDF / Image ---
+# Inputs: Symptoms / PDF / Image 
 st.header("Input Your Symptoms or Upload Report/Image")
 symptoms = st.text_area("Describe your symptoms (e.g., cold, fever, headache)", placeholder="Type your symptoms here...")
 uploaded_pdf = st.file_uploader("Upload PDF (Optional)", type=["pdf"])
 uploaded_image = st.file_uploader("Upload Image (Optional)", type=["png", "jpg", "jpeg"])
 
-# --- Process Button ---
+# Process Button
 if st.button("Process"):
-    # Check at least one input is provided
-    if not symptoms and not uploaded_pdf and not uploaded_image:
-        st.error("Please provide at least one input: Symptoms, PDF, or Image!")
-    else:
-        st.success("Processing your input...")
-        st.write("### Personal Details")
-        st.write(f"**Name:** {name}")
-        st.write(f"**Age:** {age}")
-        st.write(f"**Phone:** {phone}")
-        st.write(f"**Gender:** {gender}")
 
-        st.write("### Input Provided")
-        if symptoms:
-            st.write(f"**Symptoms:** {symptoms}")
-        if uploaded_pdf:
-            st.write(f"**Uploaded PDF:** {uploaded_pdf.name}")
-        if uploaded_image:
-            st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+    # MANDATORY PERSONAL DETAILS 
+    if not name:
+        st.error("Name is required!")
+        st.stop()
+
+    if not phone:
+        st.error("Phone number is required!")
+        st.stop()
+
+    # AT LEAST ONE CLINICAL INPUT
+    if not (symptoms or uploaded_pdf or uploaded_image):
+        st.error("Provide at least one: Symptoms, PDF, or Image!")
+        st.stop()
+
+    # RUN INGESTION AGENT
+    agent = IngestionAgent()
+
+    try:
+        result = agent.process(
+            image_file=uploaded_image,
+            name=name,
+            phone=phone,
+            age=age,
+            notes=symptoms,
+            pdf_file=uploaded_pdf,
+            allergies=allergies
+        )
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+        st.stop()
+
+    st.success("Processing complete!")
+
+    # DISPLAY MASKED INFO (NOT PII) 
+    st.write("### Personal Details (Masked)")
+    st.write(f"**Name:** {agent.mask_name(name)}")
+    st.write(f"**Phone:** {agent.mask_phone(phone)}")
+    st.write(f"**Age:** {age}")
+    st.write(f"**Gender:** {gender}")
+    if allergies:
+        st.write(f"**Allergies:** {allergies}")
+
+    # DISPLAY INPUTS
+    st.write("### Input Provided")
+    if symptoms:
+        st.write(f"**Symptoms:** {symptoms}")
+    if uploaded_pdf:
+        st.write(f"**Uploaded PDF:** {uploaded_pdf.name}")
+    if uploaded_image:
+        st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+
+    # SHOW FINAL JSON THAT GOES TO NEXT AGENT
+    st.write("### Ingestion Agent Output:")
+    st.json(result)

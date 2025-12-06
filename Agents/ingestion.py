@@ -1,0 +1,102 @@
+import os
+import uuid
+import re
+import logging
+
+class IngestionAgent:
+
+    def __init__(self, upload_dir="./uploads"):
+        self.upload_dir = upload_dir
+        os.makedirs(upload_dir, exist_ok=True)
+
+    # PII Masking
+    def mask_name(self, name):
+        if not name:
+            raise Exception("Name is required")
+
+        if len(name) < 3:
+            return "*" * len(name)
+
+        middle = "*" * (len(name) - 2)
+        return name[0] + middle + name[-1]
+
+    def mask_phone(self, phone):
+        if not phone:
+            raise Exception("Phone number is required")
+
+        digits = re.sub(r"\D", "", phone)
+
+        if len(digits) != 10:
+            raise Exception("Phone number must be 10 digits")
+
+        return "#" * 8 + digits[-2:]
+
+    # Mock Allergy Detection
+    def extract_allergies(self, notes):
+        # allergy to any medicines
+        allergies_db = ["ibuprofen", "penicillin", "aspirin", "paracetamol"]
+        if not notes:
+            return []
+        lowercased_notes = notes.lower()
+        return [a for a in allergies_db if a in lowercased_notes]
+
+    # MAIN PROCESS METHOD
+    def process(self, image_file=None, name=None, phone=None, age=None, notes=None, pdf_file=None, allergies=None):
+        """ Returns details of patient with xray and health problem (notes) """
+        # At least one clinical input required
+        if not (image_file or notes or pdf_file):
+            raise Exception("At least one clinical input (Image, PDF, or Symptoms) is required")
+
+        xray_path = None
+
+        # Handle optional image
+        if image_file:
+            allowed_ext = (".png", ".jpg", ".jpeg")
+            if not image_file.name.lower().endswith(allowed_ext):
+                raise Exception("Invalid image file type")
+
+            # Save image
+            unique_name = f"{uuid.uuid4().hex}_{image_file.name}"
+            save_path = os.path.join(self.upload_dir, unique_name)
+            with open(save_path, "wb") as f:
+                f.write(image_file.read())
+            xray_path = save_path.replace("\\", "/")
+            logging.info(f"Stored X-Ray at: {xray_path}")
+
+        # Mask sensitive data internally (not included in output)
+        masked_name = self.mask_name(name)
+        masked_phone = self.mask_phone(phone)
+
+        logging.info(f"Masked Name: {masked_name}")
+        logging.info(f"Masked Phone: {masked_phone}")
+        logging.info(f"Age: {age}")
+        logging.info(f"Notes: {notes}")
+
+        # # Save image
+        # unique_name = f"{uuid.uuid4().hex}_{image_file.name}"
+        # save_path = os.path.join(self.upload_dir, unique_name)
+
+        # with open(save_path, "wb") as f:
+        #     f.write(image_file.read())
+
+        # xray_path = save_path.replace("\\", "/")
+
+        # logging.info(f"Stored X-Ray at: {xray_path}")
+
+        # Extract allergies (mock)
+        # Use provided allergies or extract from notes
+        if allergies:
+            allergies_list = [a.strip() for a in allergies.split(",")]
+        else:
+            allergies_list = self.extract_allergies(notes)
+        logging.info(f"Detected Allergies: {allergies_list}")
+
+        # Ingestion Agent Response
+        return {
+            "patient": {
+                "age": age,
+                "allergies": allergies_list
+            },
+            "xray_path": xray_path,
+            "notes": notes
+        }
