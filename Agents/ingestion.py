@@ -7,7 +7,10 @@ class IngestionAgent:
 
     def __init__(self, upload_dir="./uploads"):
         self.upload_dir = upload_dir
-        os.makedirs(upload_dir, exist_ok=True)
+        self.images_dir = os.path.join(upload_dir, "images")
+        self.pdfs_dir = os.path.join(upload_dir, "pdfs")
+        os.makedirs(self.images_dir, exist_ok=True)
+        os.makedirs(self.pdfs_dir, exist_ok=True)
 
     # PII Masking
     def mask_name(self, name):
@@ -40,6 +43,13 @@ class IngestionAgent:
         lowercased_notes = notes.lower()
         return [a for a in allergies_db if a in lowercased_notes]
 
+    def extract_pdf_text(self, pdf_path):
+        """Mock OCR - returns dummy extracted text"""
+        if not pdf_path:
+            return None
+        # In real system, use pytesseract/pdfplumber here
+        return "Mock extracted text: Patient complains of persistent cough and fever for 3 days. Temperature 101F."
+
     # MAIN PROCESS METHOD
     def process(self, image_file=None, name=None, phone=None, age=None, notes=None, pdf_file=None, allergies=None):
         """ Returns details of patient with xray and health problem (notes) """
@@ -48,6 +58,7 @@ class IngestionAgent:
             raise Exception("At least one clinical input (Image, PDF, or Symptoms) is required")
 
         xray_path = None
+        pdf_path = None
 
         # Handle optional image
         if image_file:
@@ -56,12 +67,26 @@ class IngestionAgent:
                 raise Exception("Invalid image file type")
 
             # Save image
-            unique_name = f"{uuid.uuid4().hex}_{image_file.name}"
-            save_path = os.path.join(self.upload_dir, unique_name)
+            unique_name = f"{name}_{uuid.uuid4().hex[:6]}_{image_file.name}"
+            save_path = os.path.join(self.images_dir, unique_name)
             with open(save_path, "wb") as f:
                 f.write(image_file.read())
             xray_path = save_path.replace("\\", "/")
             logging.info(f"Stored X-Ray at: {xray_path}")
+
+        # Handle optional PDF
+        if pdf_file:
+            if not pdf_file.name.lower().endswith(".pdf"):
+                raise Exception("Invalid PDF file type")
+            
+            # Save PDF
+            unique_pdf_name = f"{name}_{uuid.uuid4().hex[:6]}_{pdf_file.name}"
+            pdf_save_path = os.path.join(self.pdfs_dir, unique_pdf_name)
+            with open(pdf_save_path, "wb") as f:
+                f.write(pdf_file.read())
+            pdf_path = pdf_save_path.replace("\\", "/")
+            pdf_text = self.extract_pdf_text(pdf_path) 
+            logging.info(f"Stored PDF at: {pdf_path} with text: {pdf_text}")
 
         # Mask sensitive data internally (not included in output)
         masked_name = self.mask_name(name)
@@ -71,17 +96,6 @@ class IngestionAgent:
         logging.info(f"Masked Phone: {masked_phone}")
         logging.info(f"Age: {age}")
         logging.info(f"Notes: {notes}")
-
-        # # Save image
-        # unique_name = f"{uuid.uuid4().hex}_{image_file.name}"
-        # save_path = os.path.join(self.upload_dir, unique_name)
-
-        # with open(save_path, "wb") as f:
-        #     f.write(image_file.read())
-
-        # xray_path = save_path.replace("\\", "/")
-
-        # logging.info(f"Stored X-Ray at: {xray_path}")
 
         # Extract allergies (mock)
         # Use provided allergies or extract from notes

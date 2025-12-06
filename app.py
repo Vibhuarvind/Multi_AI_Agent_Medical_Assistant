@@ -1,5 +1,17 @@
 import streamlit as st
+import logging
 from Agents.ingestion import IngestionAgent
+from Agents.imaging import ImagingAgent
+from Agents.therapy import TherapyAgent
+
+# Configure logging to display in terminal
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()  # Output to terminal/console
+    ]
+)
 
 st.set_page_config(page_title="Multi AI Agent Health Assistant", page_icon="🩺")
 
@@ -55,24 +67,50 @@ if st.button("Process"):
 
     st.success("Processing complete!")
 
-    # DISPLAY MASKED INFO (NOT PII) 
-    st.write("### Personal Details (Masked)")
-    st.write(f"**Name:** {agent.mask_name(name)}")
-    st.write(f"**Phone:** {agent.mask_phone(phone)}")
-    st.write(f"**Age:** {age}")
-    st.write(f"**Gender:** {gender}")
-    if allergies:
-        st.write(f"**Allergies:** {allergies}")
+    # RUN IMAGING AGENT ONLY IF XRAY IS PROVIDED
+    if result.get("xray_path"):
+        imaging = ImagingAgent()
+        imaging_result = imaging.analyze(result["xray_path"])
+    else:
+        imaging_result = {"message": "No X-ray provided to Imaging Agent"}
 
-    # DISPLAY INPUTS
-    st.write("### Input Provided")
-    if symptoms:
-        st.write(f"**Symptoms:** {symptoms}")
-    if uploaded_pdf:
-        st.write(f"**Uploaded PDF:** {uploaded_pdf.name}")
-    if uploaded_image:
-        st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
 
-    # SHOW FINAL JSON THAT GOES TO NEXT AGENT
-    st.write("### Ingestion Agent Output:")
-    st.json(result)
+    # Therapy Agent
+    therapy = TherapyAgent()
+    therapy_result = therapy.recommend(
+        notes=result["notes"],
+        age=result["patient"]["age"],
+        allergies=result["patient"]["allergies"],
+        severity_hint=imaging_result.get("severity_hint","mild")
+    )
+    # st.json(therapy_result)
+
+
+    # PERSONAL DETAILS (MASKED) 
+    with st.expander("📋 Personal Details (Masked)", expanded=True):
+        st.write(f"**Name:** {agent.mask_name(name)}")
+        st.write(f"**Phone:** {agent.mask_phone(phone)}")
+        st.write(f"**Age:** {age}")
+        st.write(f"**Gender:** {gender}")
+        if allergies:
+            st.write(f"**Allergies:** {allergies}")
+
+    # INPUT PROVIDED 
+    with st.expander("📥 Input Provided", expanded=True):
+        if symptoms:
+            st.write(f"**Symptoms:** {symptoms}")
+        if uploaded_pdf:
+            st.write(f"**Uploaded PDF:** {uploaded_pdf.name}")
+        if uploaded_image:
+            st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+
+    # INGESTION AGENT OUTPUT 
+    with st.expander("🤖 Ingestion Agent Output (JSON)", expanded=False):
+        st.json(result)
+
+    # IMAGING AGENT OUTPUT 
+    with st.expander("🔬 Imaging Agent Output (JSON)", expanded=False):
+        st.json(imaging_result)
+
+    with st.expander(" Therapy Agent Output (JSON)", expanded=True):
+        st.json(therapy_result)
