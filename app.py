@@ -3,6 +3,7 @@ import logging
 from Agents.ingestion import IngestionAgent
 from Agents.imaging import ImagingAgent
 from Agents.therapy import TherapyAgent
+from Agents.pharmacy_match import PharmacyAgent
 
 # Configure logging to display in terminal
 logging.basicConfig(
@@ -85,6 +86,11 @@ if st.button("Process"):
     )
     # st.json(therapy_result)
 
+    # PHARMACY FOUND AGENT BASED ON OTC LIST FROM THERAPY AGENT
+    pharmacy_match = PharmacyAgent()
+    medicine_skus = [opt["sku"] for opt in therapy_result["otc_options"]]
+    pharmacy_result = pharmacy_match.find_matches(medicine_skus)
+
 
     # PERSONAL DETAILS (MASKED) 
     with st.expander("📋 Personal Details (Masked)", expanded=True):
@@ -112,5 +118,8 @@ if st.button("Process"):
     with st.expander("🔬 Imaging Agent Output (JSON)", expanded=False):
         st.json(imaging_result)
 
-    with st.expander(" Therapy Agent Output (JSON)", expanded=True):
+    with st.expander(" Therapy Agent Output (JSON)", expanded=False):
         st.json(therapy_result)
+    
+    with st.expander(" Pharmacy Agent Output (JSON)",expanded=True):
+        st.json(pharmacy_result)
