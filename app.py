@@ -1,49 +1,76 @@
-import streamlit as st
-import logging
-import json
-from Agents.coordinator import Orchestrator
-from Agents.ingestion import IngestionAgent
+"""Multi-Agent Medical Assistant Streamlit UI"""
 
-# Configure logging to display in terminal
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],
+import json
+from datetime import datetime
+import streamlit as st
+
+from Agents.coordinator import Orchestrator
+from Utils.logger import get_logger
+from Utils.lookups import get_sku_to_drug_name_map, get_pharmacy_id_to_name_map
+
+logger = get_logger(__name__)
+
+
+def humanize_slot(slot_str: str) -> str:
+    """Convert ISO 8601 timestamp to human-readable format."""
+    try:
+        dt = datetime.fromisoformat(slot_str)
+        # Format: Dec 06, 09:00 AM (friendly format, no timezone clutter)
+        return dt.strftime("%b %d, %I:%M %p").strip()
+    except ValueError:
+        return slot_str
+
+
+
+st.set_page_config(
+    page_title="🩺 Healthcare Assistant",
+    page_icon="🏥",
+    layout="wide"
 )
 
-st.set_page_config(page_title="🩺 Multi AI Agent Health Assistant", page_icon="🩺")
+st.markdown("### 🩺 Healthcare Assistant")
 
-st.title("🩺 Multi AI Agent Health Assistant")
+# Safety disclaimer
+st.warning("⚠️ **This is an educational demo, NOT medical advice. Always consult a healthcare professional for medical concerns.**")
+
+
 coordinator = Orchestrator()
-mask_agent = IngestionAgent()
+sku_to_name = get_sku_to_drug_name_map()
+pharmacy_id_to_name = get_pharmacy_id_to_name_map()
 
-# Customer Information
-st.header("Personal Details")
-name = st.text_input("Name")
-age = st.number_input("Age", min_value=0, max_value=100)
-phone = st.text_input("Phone Number")
-gender = st.selectbox("Gender", ["Male", "Female", "Other"])
-allergies = st.text_input("Any Known Allergies (Optional)", placeholder="e.g., penicillin, aspirin, ibuprofen")
+with st.sidebar:
+    st.markdown("#### Patient Information")
+    name = st.text_input("Full Name")
+    age = st.number_input("Age", min_value=0, max_value=100, value=30)
+    phone = st.text_input("Phone Number")
+    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+    allergies = st.text_input(
+        "Known Allergies (Optional)",
+        placeholder="e.g., penicillin, aspirin"
+    )
 
-# Inputs: Symptoms / PDF / Image
-st.header("Input Your Symptoms or Upload Report/Image")
-symptoms = st.text_area("Describe your symptoms (e.g., cold, fever, headache)", placeholder="Type your symptoms here...")
-uploaded_pdf = st.file_uploader("Upload PDF (Optional)", type=["pdf"])
-uploaded_image = st.file_uploader("Upload Image (Optional)", type=["png", "jpg", "jpeg"])
+    st.markdown("#### Symptoms & Reports")
+    symptoms = st.text_area(
+        "Describe your symptoms",
+        placeholder="e.g., fever, cough, headache"
+    )
+    uploaded_pdf = st.file_uploader("Medical Report (PDF)", type=["pdf"])
+    uploaded_image = st.file_uploader(
+        "X-Ray or Scan Image",
+        type=["png", "jpg", "jpeg"]
+    )
 
-# Process Button
-if st.button("Process"):
+    st.caption("🔒 All information is kept confidential and anonymous.")
+    st.info(
+        "⚠️ For emergencies, call your local emergency services immediately."
+    )
 
-    if not name:
-        st.error("Name is required!")
+if st.button("Get Recommendations", type="primary"):
+    if not name or not phone:
+        st.error("Name and phone are required.")
         st.stop()
-
-    if not phone:
-        st.error("Phone number is required!")
-        st.stop()
-
     if not (symptoms or uploaded_pdf or uploaded_image):
-        st.error("Provide at least one: Symptoms, PDF, or Image!")
+        st.error("Provide at least one clinical input.")
         st.stop()
 
     try:
@@ -56,13 +83,12 @@ if st.button("Process"):
             pdf_file=uploaded_pdf,
             allergies=allergies,
         )
-
-        logging.info("Final coordinator payload:\n" + json.dumps(final_result, indent=2))
+        logger.info("Final coordinator payload:\n%s", json.dumps(final_result, indent=2))
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error(f"Error: {e}")
         st.stop()
 
-    st.success("Processing complete!")
+    st.success("✅ Analysis Complete")
     st.info(final_result["disclaimer"])
 
     ingestion_output = final_result["ingestion_output"]
@@ -70,38 +96,114 @@ if st.button("Process"):
     therapy_result = final_result["therapy_plan"]
     pharmacy_result = final_result["pharmacy_match"]
 
-    with st.expander("📋 Personal Details (Masked)", expanded=True):
-        st.write(f"**Name:** {mask_agent.mask_name(name)}")
-        st.write(f"**Phone:** {mask_agent.mask_phone(phone)}")
-        st.write(f"**Age:** {age}")
-        st.write(f"**Gender:** {gender}")
-        if allergies:
-            st.write(f"**Allergies:** {allergies}")
+    # Two main views: Customer summary vs. System observability
+    tab_customer, tab_observability = st.tabs(
+        ["👤 Customer Summary", "🔍 System Observability"]
+    )
 
-    with st.expander("📥 Input Provided", expanded=True):
-        if symptoms:
-            st.write(f"**Symptoms:** {symptoms}")
-        if uploaded_pdf:
-            st.write(f"**Uploaded PDF:** {uploaded_pdf.name}")
-        if uploaded_image:
-            st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+    # ---------------- Customer-facing view ----------------
+    with tab_customer:
+        # Compact metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Condition", diagnosis["condition"].replace("_", " ").title())
+        with col2:
+            st.metric("Severity", diagnosis["severity"].title())
+        with col3:
+            if final_result["doctor_escalation_needed"]:
+                st.metric("Action", "⚠️ See Doctor", delta="Urgent")
+            else:
+                st.metric("Action", "✓ Self Care")
 
-    with st.expander("🤖 Ingestion Agent Output (JSON)", expanded=False):
-        st.json(ingestion_output)
+        # Recommended Medicines
+        st.markdown("#### 💊 Recommended Medicines")
+        if therapy_result["otc_options"]:
+            for option in therapy_result["otc_options"]:
+                drug_name = sku_to_name.get(option['sku'], option['sku'])
+                warnings_text = (
+                    f" ⚠️ {', '.join(option['warnings'])}"
+                    if option['warnings'] else ""
+                )
+                st.write(
+                    f"• **{drug_name}** — Take {option['dose']}, "
+                    f"{option['freq']}{warnings_text}"
+                )
+        else:
+            st.write("No over-the-counter medicines recommended at this time.")
 
-    with st.expander("🔬 Imaging Agent Output (JSON)", expanded=False):
-        st.json(diagnosis)
+        # Safety Alerts
+        if therapy_result["red_flags"]:
+            st.markdown("#### ⚠️ Important Safety Information")
+            for flag in therapy_result["red_flags"]:
+                st.warning(flag)
 
-    with st.expander("💊 Therapy Agent Output (JSON)", expanded=False):
-        st.json(therapy_result)
+        # Pharmacy Delivery
+        st.markdown("#### 🏥 Pharmacy & Delivery")
+        if "pharmacy_id" in pharmacy_result:
+            pharmacy_name = pharmacy_id_to_name.get(
+                pharmacy_result['pharmacy_id'],
+                pharmacy_result['pharmacy_id']
+            )
+            st.write(f"**Pharmacy:** {pharmacy_name}")
+            st.write(f"**Estimated Delivery:** {pharmacy_result['eta_min']} minutes")
+            st.write(f"**Delivery Fee:** ₹{pharmacy_result['delivery_fee']}")
+        else:
+            st.write(
+                pharmacy_result.get(
+                    "message", "No pharmacy available for delivery."
+                )
+            )
 
-    with st.expander("🏥 Pharmacy Agent Output (JSON)", expanded=True):
-        st.json(pharmacy_result)
+        # Doctor Consultations (only if escalation needed)
+        if final_result["doctor_escalation_needed"] and final_result["escalation_suggestions"]:
+            st.markdown("#### 👨‍⚕️ Available Doctors for Consultation")
+            for doc in final_result["escalation_suggestions"]:
+                with st.expander(f"{doc['doctor']} — {doc['specialty']}"):
+                    st.write(f"**Specialty:** {doc['specialty']}")
+                    st.write("**Available Slots:**")
+                    for slot in doc.get("tele_slots", []):
+                        st.write(f"  • {humanize_slot(slot)}")
+                    st.caption(f"Reason: {doc['reason']}")
 
-    with st.expander("📜 Coordinator Timeline", expanded=False):
-        st.write(final_result["timeline"])
+    # ---------------- System observability view ----------------
+    with tab_observability:
+        st.markdown("### 🔍 System Observability (Event Log)")
 
-    with st.expander("👨‍⚕️ Doctor Escalation Suggestions", expanded=False):
-        st.write(f"Escalation needed: {final_result['doctor_escalation_needed']}")
-        st.json(final_result["escalation_suggestions"])
+        # Human-readable pipeline timeline
+        timeline_labels = {
+            "ingestion_completed": "Ingestion completed (inputs validated & saved)",
+            "imaging_completed": "Imaging completed (X-ray analyzed)",
+            "imaging_skipped": "Imaging skipped (no X-ray provided)",
+            "therapy_completed": "Therapy planning completed",
+            "pharmacy_match_completed": "Pharmacy matching completed",
+        }
 
+        with st.expander("📌 Pipeline Timeline", expanded=True):
+            for step in final_result.get("timeline", []):
+                st.write(f"• {timeline_labels.get(step, step)}")
+
+        # Detailed agent outputs (for observability / debugging)
+        st.markdown("#### 🧪 Agent Outputs & Debug JSON")
+        agent_tab_ing, agent_tab_img, agent_tab_ther, agent_tab_pharm, agent_tab_full = st.tabs(
+            ["Ingestion", "Imaging", "Therapy", "Pharmacy", "Full Coordinator"]
+        )
+
+        with agent_tab_ing:
+            st.caption("Ingestion Agent Output")
+            st.json(ingestion_output)
+
+        with agent_tab_img:
+            st.caption("Imaging Agent Output")
+            st.json(diagnosis)
+
+        with agent_tab_ther:
+            st.caption("Therapy Agent Output")
+            st.json(therapy_result)
+
+        with agent_tab_pharm:
+            st.caption("Pharmacy Match Output")
+            st.json(pharmacy_result)
+
+        with agent_tab_full:
+            st.caption("Full Coordinator Payload")
+            st.json(final_result)

@@ -1,19 +1,15 @@
-import pandas as pd
-import json
 import math
+from Utils.logger import get_logger
+from Utils.data_loader import load_pharmacies, load_inventory, load_zipcodes
+
+logger = get_logger(__name__)
 
 class PharmacyAgent:
 
-    def __init__(self,
-                 inventory_file="Data/inventory.csv",
-                 zipcode_file="Data/zipcodes.csv",
-                 pharmacy_file="Data/pharmacies.json"):
-
-        self.inventory = pd.read_csv(inventory_file)
-        self.zipcodes = pd.read_csv(zipcode_file)
-        
-        with open(pharmacy_file,"r") as f:
-            self.pharmacies = json.load(f)
+    def __init__(self):
+        self.inventory = load_inventory()
+        self.zipcodes = load_zipcodes()
+        self.pharmacies = load_pharmacies()
 
     def _distance(self, lat1, lon1, lat2, lon2):
         """ Dummy Manhattan distance for POC """

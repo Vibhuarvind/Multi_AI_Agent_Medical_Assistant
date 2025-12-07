@@ -1,5 +1,7 @@
 import random
-import logging
+from Utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 class ImagingAgent:
 
@@ -38,7 +40,7 @@ class ImagingAgent:
             elif pneu > 0.35: sev = "moderate"
             else: sev = "mild"
 
-        logging.info(f"Imaging output {probs} severity={sev}")
+        logger.info("Imaging output %s severity=%s", probs, sev)
 
         return {
             "condition_probs": probs,

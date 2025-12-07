@@ -1,11 +1,16 @@
 import os
 import uuid
 import re
-import logging
+"""Ingestion Agent: Handles file validation, PII masking, and file saving."""
+
+from Utils.constants import UPLOADS_DIR
+from Utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 class IngestionAgent:
 
-    def __init__(self, upload_dir="./uploads"):
+    def __init__(self, upload_dir=UPLOADS_DIR):
         self.upload_dir = upload_dir
         self.images_dir = os.path.join(upload_dir, "images")
         self.pdfs_dir = os.path.join(upload_dir, "pdfs")
@@ -72,7 +77,7 @@ class IngestionAgent:
             with open(save_path, "wb") as f:
                 f.write(image_file.read())
             xray_path = save_path.replace("\\", "/")
-            logging.info(f"Stored X-Ray at: {xray_path}")
+            logger.info("Stored X-Ray at: %s", xray_path)
 
         # Handle optional PDF
         if pdf_file:
@@ -86,16 +91,16 @@ class IngestionAgent:
                 f.write(pdf_file.read())
             pdf_path = pdf_save_path.replace("\\", "/")
             pdf_text = self.extract_pdf_text(pdf_path) 
-            logging.info(f"Stored PDF at: {pdf_path} with text: {pdf_text}")
+            logger.info("Stored PDF at: %s with text: %s", pdf_path, pdf_text)
 
         # Mask sensitive data internally (not included in output)
         masked_name = self.mask_name(name)
         masked_phone = self.mask_phone(phone)
 
-        logging.info(f"Masked Name: {masked_name}")
-        logging.info(f"Masked Phone: {masked_phone}")
-        logging.info(f"Age: {age}")
-        logging.info(f"Notes: {notes}")
+        logger.info("Masked Name: %s", masked_name)
+        logger.info("Masked Phone: %s", masked_phone)
+        logger.info("Age: %d", age)
+        logger.info("Notes: %s", notes)
 
         # Extract allergies (mock)
         # Use provided allergies or extract from notes
@@ -103,7 +108,7 @@ class IngestionAgent:
             allergies_list = [a.strip() for a in allergies.split(",")]
         else:
             allergies_list = self.extract_allergies(notes)
-        logging.info(f"Detected Allergies: {allergies_list}")
+        logger.info("Detected Allergies: %s", allergies_list)
 
         # Ingestion Agent Response
         return {

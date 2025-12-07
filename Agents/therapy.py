@@ -1,12 +1,16 @@
-import pandas as pd
-import re
-import logging
+"""Therapy Agent: Recommends OTC options based on symptoms and conditions."""
+
+from Utils.logger import get_logger
+from Utils.data_loader import load_medicines, load_interactions
+
+logger = get_logger(__name__)
 
 class TherapyAgent:
+    """Recommends OTC medications with age/allergy checks and interaction screening."""
 
-    def __init__(self, med_file="Data/medicines.csv", interaction_file="Data/interactions.csv"):
-        self.meds = pd.read_csv(med_file)
-        self.interactions = pd.read_csv(interaction_file)
+    def __init__(self):
+        self.meds = load_medicines()
+        self.interactions = load_interactions()
         
         self.dosage_map = {
             "Paracetamol": {"dose": "500 mg", "freq": "q6h"},
@@ -61,13 +65,13 @@ class TherapyAgent:
         for row in matched:
             if age < row['age_min']:
                 red_flags.append(f"{row['drug_name']} not suitable for age < {row['age_min']}")
-                logging.info(f"Rejected {row['drug_name']} (SKU: {row['sku']}) - age restriction")
+                logger.info("Rejected %s (SKU: %s) - age restriction", row['drug_name'], row['sku'])
                 continue
 
             warn=[]
             if allergies and any(a.lower() in row['contra_allergy_keywords'].lower() for a in allergies):
                 red_flags.append(f"Avoid {row['drug_name']} — patient allergic")
-                logging.info(f"Rejected {row['drug_name']} (SKU: {row['sku']}) - allergy contraindication")
+                logger.info("Rejected %s (SKU: %s) - allergy contraindication", row['drug_name'], row['sku'])
                 continue
 
             if row['contra_allergy_keywords']!="None":
@@ -76,7 +80,7 @@ class TherapyAgent:
             d = self.dosage_map.get(row['drug_name'],{"dose":"as directed","freq":"as needed"})
 
             # Log recommended medicine details
-            logging.info(f"Recommending: {row['drug_name']} (SKU: {row['sku']}) - {d['dose']} {d['freq']}")
+            logger.info("Recommending: %s (SKU: %s) - %s %s", row['drug_name'], row['sku'], d['dose'], d['freq'])
 
             otc_list.append({
                 "sku": row['sku'],
@@ -89,7 +93,7 @@ class TherapyAgent:
         if len(otc_list)>1:
             red_flags += self._check_interactions(otc_list)
 
-        logging.info(f"TherapyAgent: {len(otc_list)} OTC options, {len(red_flags)} red flags")
+        logger.info("TherapyAgent: %d OTC options, %d red flags", len(otc_list), len(red_flags))
         
         return {"otc_options": otc_list, "red_flags": red_flags}
 
@@ -113,9 +117,10 @@ class TherapyAgent:
                 if not match.empty:
                     level = match.iloc[0]["level"]
                     note = match.iloc[0]['note']
-                    logging.info(f"Interaction detected ({level}): {drug_a} ({sku_a}) + {drug_b} ({sku_b}) - {note}")
+                    logger.info("Interaction detected (%s): %s (%s) + %s (%s) - %s", level, drug_a, sku_a, drug_b, sku_b, note)
                     
-                    if level == "High":
-                        warnings.append(f"Drug interaction: {drug_a} & {drug_b} — {note}")
+                    # Show High and Moderate interactions to customers (Low is too minor to surface)
+                    if level in ["High", "Moderate"]:
+                        warnings.append(f"Drug interaction ({level}): {drug_a} & {drug_b} — {note}")
         
         return warnings
