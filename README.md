@@ -111,11 +111,6 @@ pytest tests/
 
 Deployed to Streamlit Community Cloud: https://multi-ai-agent-doctor-by-vidisha.streamlit.app/
 
-1. Push code to GitHub
-2. Connect repo at [share.streamlit.io](https://share.streamlit.io)
-3. Set main file: `app.py`
-4. Deploy!
-
 ## Disclaimer
 
 **⚠️ STRICTLY A PROOF OF CONCEPT**
