@@ -18,8 +18,13 @@ class TherapyAgent:
             "Hydrocortisone Cream": {"dose": "apply thin layer", "freq": "q12h"},
             "Oral Rehydration Salt (ORS)": {"dose": "1 sachet", "freq": "q4h"}
         }
+        self.condition_keywords = {
+            "pneumonia": ["fever", "pain", "inflammation", "cough", "chest", "shortness"],
+            "covid_suspect": ["fever", "cough", "fatigue", "breath", "loss", "taste"],
+            "normal": []
+        }
 
-    def recommend(self, notes:str, age:int, allergies:list, severity_hint:str):
+    def recommend(self, notes:str, age:int, allergies:list, severity_hint:str, condition_probs:dict=None):
 
         red_flags = []
         otc_list = []
@@ -28,10 +33,20 @@ class TherapyAgent:
             red_flags.append("High severity detected — Medical consultation needed")
             red_flags.append("SpO2 likely < 92% — Immediate medical attention required")
 
+        top_condition = None
+        top_prob = 0.0
+        if condition_probs:
+            top_condition = max(condition_probs, key=condition_probs.get)
+            top_prob = condition_probs.get(top_condition, 0.0)
+
         if not notes:
             return {"otc_options":[], "red_flags":["No symptoms provided"]}
 
         notes_lower = notes.lower()
+        if top_condition and top_prob >= 0.5:
+            keywords = self.condition_keywords.get(top_condition, [])
+            if keywords:
+                notes_lower = " ".join([notes_lower] + keywords)
 
         matched = []
         for _, row in self.meds.iterrows():
