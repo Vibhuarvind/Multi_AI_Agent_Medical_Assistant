@@ -11,3 +11,12 @@ wheels/
 
 .python-version
 
+# Temporary runtime data (keep folder, ignore contents)
+tmp/*
+!tmp/.gitkeep
+tmp/images/*
+!tmp/images/.gitkeep
+tmp/pdfs/*
+!tmp/pdfs/.gitkeep
+
+

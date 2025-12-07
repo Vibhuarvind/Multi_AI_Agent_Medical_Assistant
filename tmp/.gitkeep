@@ -1,0 +1,5 @@
+# Keeps the tmp directory (ephemeral uploads) in version control without committing user data.
+
+# Keep tmp directory in version control while ignoring its runtime contents.
+
+

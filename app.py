@@ -23,7 +23,7 @@ def humanize_slot(slot_str: str) -> str:
 
 
 st.set_page_config(
-    page_title="🩺 Healthcare Assistant",
+    page_title="Healthcare Assistant",
     page_icon="🏥",
     layout="wide"
 )
