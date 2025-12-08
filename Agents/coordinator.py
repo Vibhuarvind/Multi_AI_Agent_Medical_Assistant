@@ -16,13 +16,13 @@ from Utils.constants import SEVERITY_MILD
 
 logger = get_logger(__name__)
 
-
 class Orchestrator:
     """Central orchestrator that coordinates all agents and consolidates the final plan."""
 
     DEFAULT_LAT = 19.12
     DEFAULT_LON = 72.84
 
+    #initializing the agents
     def __init__(self):
         self.ingestion = IngestionAgent()
         self.imaging = ImagingAgent()
@@ -31,15 +31,19 @@ class Orchestrator:
         self.doctors = load_doctors()
         self.doctor_escalation = DoctorEscalationAgent(self.doctors)
 
+    #function to get the timestamp
     def _timestamp(self) -> str:
         return datetime.utcnow().isoformat() + "Z"
 
+    #function to add a timeline entry
     def _timeline_entry(self, step: str) -> dict:
         return {"step": step, "at": self._timestamp()}
 
+    #function to combine the notes from the ingestion agent
     def _combine_notes(self, notes: str, pdf_text: str) -> str:
         return " ".join(filter(None, [notes, pdf_text])).strip()
 
+    #function to build the order preview
     def _build_order_preview(self, pharmacy_match: dict) -> dict | None:
         if "pharmacy_id" not in pharmacy_match:
             return None
@@ -67,6 +71,7 @@ class Orchestrator:
             "subtotal": subtotal,
         }
 
+    #function to finalize the order
     def finalize_order(self, order_preview: dict | None) -> dict | None:
         if not order_preview:
             return None
@@ -78,6 +83,7 @@ class Orchestrator:
         )
         return order
 
+    #main function that orchestrates the flow of the pipeline
     def run_flow(
         self,
         image_file=None,
@@ -106,6 +112,7 @@ class Orchestrator:
             user_lat = self.DEFAULT_LAT
             user_lon = self.DEFAULT_LON
 
+        #calling ingestion agent
         ingestion_output = self.ingestion.process(
             image_file=image_file,
             name=name,
@@ -118,7 +125,8 @@ class Orchestrator:
         data = ingestion_output
 
         timeline = [self._timeline_entry("ingestion_completed")]
-
+        
+        #calling imaging agent
         condition_probs = {}
         if data["xray_path"]:
             img_result = self.imaging.analyze(data["xray_path"])
@@ -136,6 +144,7 @@ class Orchestrator:
             severity = SEVERITY_MILD
             timeline.append(self._timeline_entry("imaging_skipped"))
 
+        #calling therapy agent
         notes_for_therapy = self._combine_notes(data.get("notes"), data.get("pdf_text"))
         therapy = self.therapy.recommend(
             notes=notes_for_therapy,
@@ -146,12 +155,15 @@ class Orchestrator:
         )
         timeline.append(self._timeline_entry("therapy_completed"))
 
+        #calling doctor escalation agent
         red_flags = therapy.get("red_flags", [])
         doctor_assessment = self.doctor_escalation.assess(
             red_flags, severity, condition_probs
         )
         timeline.append(self._timeline_entry("doctor_escalation_evaluated"))
 
+
+        #calling pharmacy agent
         skus = [m["sku"] for m in therapy["otc_options"]]
         if skus:
             pharmacy_match = self.pharmacy.find_matches(
@@ -161,10 +173,12 @@ class Orchestrator:
             pharmacy_match = {"message": "No OTC medicines selected"}
         timeline.append(self._timeline_entry("pharmacy_match_completed"))
 
+        #building medicine order preview
         order_preview = self._build_order_preview(pharmacy_match)
         if order_preview:
             timeline.append(self._timeline_entry("order_preview_ready"))
 
+        #returning the final response from all the agents
         return {
             "ingestion_output": ingestion_output,
             "patient": data["patient"],
