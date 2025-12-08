@@ -1,0 +1,26 @@
+{
+  "pharmacy_id": "ph001",
+  "items": [
+    {
+      "sku": "SKU001",
+      "drug_name": "Paracetamol",
+      "qty": 100,
+      "unit_price": 20,
+      "subtotal": 2000
+    },
+    {
+      "sku": "SKU002",
+      "drug_name": "Ibuprofen",
+      "qty": 50,
+      "unit_price": 30,
+      "subtotal": 1500
+    }
+  ],
+  "eta_min": 20,
+  "delivery_fee": 15,
+  "subtotal": 3500,
+  "order_id": "ORDER-AB12CD",
+  "placed_at": "2025-12-08T16:30:45.123456Z",
+  "total_cost": 3515
+}
+

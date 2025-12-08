@@ -30,6 +30,9 @@ def test_full_chain_smoke():
     assert "diagnosis" in res
     assert "therapy_plan" in res
     assert "pharmacy_match" in res
+    assert "order_preview" in res
+    assert isinstance(res["timeline"], list)
+    assert "doctor_escalation_needed" in res
     
     # Check if we got a condition (defaults to symptom_based if no image)
     assert res["diagnosis"]["condition"] in ["symptom_based", "unknown"] or isinstance(res["diagnosis"]["condition"], str)
@@ -72,3 +75,5 @@ def test_therapy_to_pharmacy_handoff():
     assert "pharmacy_id" in res
     assert "items" in res
     assert len(res["items"]) > 0
+    assert "price" in res["items"][0]
+    assert "drug_name" in res["items"][0]

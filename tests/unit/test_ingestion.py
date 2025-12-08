@@ -39,6 +39,7 @@ def test_process_saves_image_and_pdf(tmp_path):
     assert payload["notes"] == "fever and cough"
     assert payload["xray_path"]
     assert Path(payload["xray_path"]).exists()
+    assert payload["pdf_text"]
 
 
 def test_process_rejects_invalid_image_extension(tmp_path):

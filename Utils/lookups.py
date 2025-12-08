@@ -1,8 +1,8 @@
 """Lookup dictionaries for user-friendly name mappings."""
 
 from functools import lru_cache
-from typing import Dict
-from .data_loader import load_medicines, load_pharmacies
+from typing import Dict, Tuple, Optional
+from .data_loader import load_medicines, load_pharmacies, load_pincode_map
 
 
 @lru_cache(maxsize=1)
@@ -27,4 +27,14 @@ def get_pharmacy_id_to_name_map() -> Dict[str, str]:
     """
     pharmacies = load_pharmacies()
     return {ph["id"]: ph["Name"] for ph in pharmacies}
+
+
+def get_coords_for_pincode(pincode: str) -> Optional[Tuple[float, float]]:
+    """
+    Return latitude and longitude for the provided pincode.
+    """
+    if not pincode:
+        return None
+    mapping = load_pincode_map()
+    return mapping.get(str(pincode).strip())
 
