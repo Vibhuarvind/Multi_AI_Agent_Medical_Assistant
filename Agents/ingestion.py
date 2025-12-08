@@ -1,6 +1,7 @@
 import os
 import uuid
 import re
+from pathlib import Path
 """Ingestion Agent: Handles file validation, PII masking, and file saving."""
 
 from Utils.constants import UPLOADS_DIR
@@ -16,6 +17,57 @@ class IngestionAgent:
         self.pdfs_dir = os.path.join(upload_dir, "pdfs")
         os.makedirs(self.images_dir, exist_ok=True)
         os.makedirs(self.pdfs_dir, exist_ok=True)
+
+    def _save_upload(self, upload_file, target_dir):
+        """
+        Save an uploaded file under a unique, *non-identifying* name.
+
+        To stay aligned with the POC brief (no PHI/PII storage; see
+        `Multi‑Agent Healthcare POC.pdf`), we must not persist raw
+        filenames that might contain patient names/IDs.
+
+        However, for demo predictability we _do_ want ImagingAgent's
+        filename-based heuristics (e.g. 'pneumonia', 'covid', 'normal')
+        to still work when tests deliberately pass such names.
+
+        Compromise:
+        - Inspect the original stem for known, *non-identifying*
+          condition keywords.
+        - If any are present, keep only that keyword as a prefix.
+        - Otherwise, use a generic 'xray' prefix.
+        - Always append a short random suffix so filenames are unique.
+        """
+        suffix = Path(upload_file.name).suffix or ""
+        stem = Path(upload_file.name).stem.lower()
+
+        keywords = ["pneumonia", "covid", "normal"]
+        keyword_prefix = None
+        for kw in keywords:
+            if kw in stem:
+                keyword_prefix = kw
+                break
+
+        base_prefix = keyword_prefix or "xray"
+        unique_name = f"{base_prefix}_{uuid.uuid4().hex[:6]}{suffix}"
+        save_path = os.path.join(target_dir, unique_name)
+        with open(save_path, "wb") as f:
+            f.write(upload_file.read())
+        return save_path.replace("\\", "/")
+
+    def _normalize_allergies(self, allergies):
+        if not allergies:
+            return []
+        if isinstance(allergies, (list, tuple)):
+            return [str(a).strip() for a in allergies if str(a).strip()]
+        if isinstance(allergies, str):
+            return [a.strip() for a in allergies.split(",") if a.strip()]
+        raise ValueError("Allergies must be a string or list of strings")
+
+    def _log_notes_snippet(self, notes):
+        snippet = (notes or "").strip().replace("\n", " ")
+        if len(snippet) > 80:
+            snippet = f"{snippet[:80]}..."
+        logger.info("Clinical notes snippet: %s", snippet or "<no text provided>")
 
     # PII Masking
     def mask_name(self, name):
@@ -64,6 +116,7 @@ class IngestionAgent:
 
         xray_path = None
         pdf_path = None
+        pdf_text = None
 
         # Handle optional image
         if image_file:
@@ -72,11 +125,7 @@ class IngestionAgent:
                 raise Exception("Invalid image file type")
 
             # Save image
-            unique_name = f"{name}_{uuid.uuid4().hex[:6]}_{image_file.name}"
-            save_path = os.path.join(self.images_dir, unique_name)
-            with open(save_path, "wb") as f:
-                f.write(image_file.read())
-            xray_path = save_path.replace("\\", "/")
+            xray_path = self._save_upload(image_file, self.images_dir)
             logger.info("Stored X-Ray at: %s", xray_path)
 
         # Handle optional PDF
@@ -85,12 +134,8 @@ class IngestionAgent:
                 raise Exception("Invalid PDF file type")
             
             # Save PDF
-            unique_pdf_name = f"{name}_{uuid.uuid4().hex[:6]}_{pdf_file.name}"
-            pdf_save_path = os.path.join(self.pdfs_dir, unique_pdf_name)
-            with open(pdf_save_path, "wb") as f:
-                f.write(pdf_file.read())
-            pdf_path = pdf_save_path.replace("\\", "/")
-            pdf_text = self.extract_pdf_text(pdf_path) 
+            pdf_path = self._save_upload(pdf_file, self.pdfs_dir)
+            pdf_text = self.extract_pdf_text(pdf_path)
             logger.info("Stored PDF at: %s with text: %s", pdf_path, pdf_text)
 
         # Mask sensitive data internally (not included in output)
@@ -100,12 +145,12 @@ class IngestionAgent:
         logger.info("Masked Name: %s", masked_name)
         logger.info("Masked Phone: %s", masked_phone)
         logger.info("Age: %d", age)
-        logger.info("Notes: %s", notes)
+        self._log_notes_snippet(notes)
 
         # Extract allergies (mock)
         # Use provided allergies or extract from notes
         if allergies:
-            allergies_list = [a.strip() for a in allergies.split(",")]
+            allergies_list = self._normalize_allergies(allergies)
         else:
             allergies_list = self.extract_allergies(notes)
         logger.info("Detected Allergies: %s", allergies_list)
@@ -117,5 +162,6 @@ class IngestionAgent:
                 "allergies": allergies_list
             },
             "xray_path": xray_path,
-            "notes": notes
+            "notes": notes or "",
+            "pdf_text": pdf_text
         }

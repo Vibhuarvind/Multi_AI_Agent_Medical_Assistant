@@ -1,16 +1,27 @@
 """Coordinator/Orchestrator agent that routes tasks and consolidates the final plan."""
 
+from copy import deepcopy
+from datetime import datetime
+from uuid import uuid4
+
 from Agents.ingestion import IngestionAgent
 from Agents.imaging import ImagingAgent
 from Agents.therapy import TherapyAgent
 from Agents.pharmacy_match import PharmacyAgent
+from Agents.doctor_escalation import DoctorEscalationAgent
 from Utils.logger import get_logger
 from Utils.data_loader import load_doctors
+from Utils.lookups import get_coords_for_pincode
+from Utils.constants import SEVERITY_MILD
 
 logger = get_logger(__name__)
 
+
 class Orchestrator:
-    """Central orchestrator that coordinates all agents and consolidates final plan."""
+    """Central orchestrator that coordinates all agents and consolidates the final plan."""
+
+    DEFAULT_LAT = 19.12
+    DEFAULT_LON = 72.84
 
     def __init__(self):
         self.ingestion = IngestionAgent()
@@ -18,10 +29,68 @@ class Orchestrator:
         self.therapy = TherapyAgent()
         self.pharmacy = PharmacyAgent()
         self.doctors = load_doctors()
+        self.doctor_escalation = DoctorEscalationAgent(self.doctors)
 
-    def run_flow(self, image_file=None, name=None, phone=None, age=None,
-                 notes=None, allergies=None, pdf_file=None,
-                 user_lat=19.12, user_lon=72.84):
+    def _timestamp(self) -> str:
+        return datetime.utcnow().isoformat() + "Z"
+
+    def _timeline_entry(self, step: str) -> dict:
+        return {"step": step, "at": self._timestamp()}
+
+    def _combine_notes(self, notes: str, pdf_text: str) -> str:
+        return " ".join(filter(None, [notes, pdf_text])).strip()
+
+    def _build_order_preview(self, pharmacy_match: dict) -> dict | None:
+        if "pharmacy_id" not in pharmacy_match:
+            return None
+
+        items = []
+        subtotal = 0.0
+        for item in pharmacy_match.get("items", []):
+            qty = item.get("qty", 0)
+            price = float(item.get("price") or 0)
+            line_total = qty * price
+            subtotal += line_total
+            items.append({
+                "sku": item["sku"],
+                "drug_name": item.get("drug_name"),
+                "qty": qty,
+                "unit_price": price,
+                "subtotal": line_total,
+            })
+
+        return {
+            "pharmacy_id": pharmacy_match["pharmacy_id"],
+            "items": items,
+            "eta_min": pharmacy_match.get("eta_min"),
+            "delivery_fee": pharmacy_match.get("delivery_fee", 0),
+            "subtotal": subtotal,
+        }
+
+    def finalize_order(self, order_preview: dict | None) -> dict | None:
+        if not order_preview:
+            return None
+        order = deepcopy(order_preview)
+        order["order_id"] = f"ORDER-{uuid4().hex[:6].upper()}"
+        order["placed_at"] = datetime.utcnow().isoformat() + "Z"
+        order["total_cost"] = round(
+            order_preview["subtotal"] + order_preview.get("delivery_fee", 0), 2
+        )
+        return order
+
+    def run_flow(
+        self,
+        image_file=None,
+        name=None,
+        phone=None,
+        age=None,
+        notes=None,
+        allergies=None,
+        pdf_file=None,
+        user_lat: float | None = None,
+        user_lon: float | None = None,
+        pincode: str | None = None,
+    ):
         """
         Execute the master pipeline through all agents.
 
@@ -30,93 +99,89 @@ class Orchestrator:
             and escalation
         """
 
-        # INGESTION
+        coords = get_coords_for_pincode(pincode)
+        if coords:
+            user_lat, user_lon = coords
+        if user_lat is None or user_lon is None:
+            user_lat = self.DEFAULT_LAT
+            user_lon = self.DEFAULT_LON
+
         ingestion_output = self.ingestion.process(
-            image_file=image_file, 
-            name=name, 
+            image_file=image_file,
+            name=name,
             phone=phone,
-            age=age, 
-            notes=notes, 
-            allergies=allergies, 
-            pdf_file=pdf_file
+            age=age,
+            notes=notes,
+            allergies=allergies,
+            pdf_file=pdf_file,
         )
         data = ingestion_output
 
-        timeline = [
-            "ingestion_completed"
-        ]
+        timeline = [self._timeline_entry("ingestion_completed")]
 
         condition_probs = {}
-        # IMAGING (Only if x-ray exists)
         if data["xray_path"]:
             img_result = self.imaging.analyze(data["xray_path"])
             condition_probs = img_result.get("condition_probs", {}) or {}
-            condition = max(condition_probs, key=condition_probs.get) if condition_probs else "unknown"
+            condition = (
+                max(condition_probs, key=condition_probs.get)
+                if condition_probs
+                else "unknown"
+            )
             severity = img_result["severity_hint"]
-            timeline.append("imaging_completed")
+            timeline.append(self._timeline_entry("imaging_completed"))
         else:
-            img_result = {"condition_probs":None,"severity_hint":"not_assessed"}
+            img_result = {"condition_probs": None, "severity_hint": "not_assessed"}
             condition = "symptom_based"
-            severity = "mild"
-            timeline.append("imaging_skipped")
+            severity = SEVERITY_MILD
+            timeline.append(self._timeline_entry("imaging_skipped"))
 
-        # THERAPY
+        notes_for_therapy = self._combine_notes(data.get("notes"), data.get("pdf_text"))
         therapy = self.therapy.recommend(
-            notes=data["notes"],
+            notes=notes_for_therapy,
             age=data["patient"]["age"],
             allergies=data["patient"]["allergies"],
             severity_hint=severity,
-            condition_probs=condition_probs
+            condition_probs=condition_probs,
         )
-        timeline.append("therapy_completed")
+        timeline.append(self._timeline_entry("therapy_completed"))
 
-        # check for escalation risk
         red_flags = therapy.get("red_flags", [])
-        max_confidence = (
-            max(condition_probs.values()) if condition_probs else 0.0
+        doctor_assessment = self.doctor_escalation.assess(
+            red_flags, severity, condition_probs
         )
-        escalate = any(
-            flag for flag in red_flags
-            if "High severity" in flag or "SpO2" in flag
-        ) or severity == "severe" or max_confidence < 0.5
+        timeline.append(self._timeline_entry("doctor_escalation_evaluated"))
 
-        # PHARMACY MATCH
         skus = [m["sku"] for m in therapy["otc_options"]]
-        pharmacy_match = (
-            self.pharmacy.find_matches(skus, user_lat=user_lat, user_lon=user_lon)
-            if skus
-            else {"message": "No OTC medicines selected"}
-        )
-        timeline.append("pharmacy_match_completed")
+        if skus:
+            pharmacy_match = self.pharmacy.find_matches(
+                skus, user_lat=user_lat, user_lon=user_lon
+            )
+        else:
+            pharmacy_match = {"message": "No OTC medicines selected"}
+        timeline.append(self._timeline_entry("pharmacy_match_completed"))
 
-        escalation_suggestions = []
-        if escalate:
-            escalation_suggestions = [
-                {
-                    "doctor": doc["name"],
-                    "specialty": doc["specialty"],
-                    "tele_slots": doc["tele_slots"],
-                    "reason": "Severe findings or red flags detected"
-                }
-                for doc in self.doctors
-            ]
+        order_preview = self._build_order_preview(pharmacy_match)
+        if order_preview:
+            timeline.append(self._timeline_entry("order_preview_ready"))
 
-        # FINAL RESPONSE ON THE BASIS OF ALL AGENTS
         return {
             "ingestion_output": ingestion_output,
             "patient": data["patient"],
             "diagnosis": {
                 "condition": condition,
                 "severity": severity,
-                "confidence_source": "xray" if data["xray_path"] else "symptoms"
+                "confidence_source": "xray" if data["xray_path"] else "symptoms",
             },
             "therapy_plan": therapy,
             "pharmacy_match": pharmacy_match,
-            "doctor_escalation_needed": escalate,
-            "escalation_suggestions": escalation_suggestions,
+            "doctor_escalation_needed": doctor_assessment["doctor_escalation_needed"],
+            "escalation_suggestions": doctor_assessment["escalation_suggestions"],
+            "doctor_assessment": doctor_assessment,
             "timeline": timeline,
+            "order_preview": order_preview,
             "disclaimer": (
                 "This is not medical advice. Consult a doctor for diagnosis, "
                 "emergencies, or worsening symptoms."
-            )
+            ),
         }

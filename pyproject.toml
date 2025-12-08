@@ -1,11 +1,22 @@
 [project]
 name = "multi-ai-agent-medical-assistant"
 version = "0.1.0"
-description = "Add your description here"
+description = "An educational multi-agent medical assistant proof of concept"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 dependencies = [
-    "pandas>=2.3.3",
-    "pylint>=4.0.4",
+    "streamlit>=1.20.0",
+    "pandas>=2.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
     "pytest>=9.0.2",
 ]
+
+[build-system]
+requires = ["setuptools>=65.5.1", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["Agents", "Utils"]

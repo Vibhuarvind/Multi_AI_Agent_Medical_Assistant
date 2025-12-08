@@ -3,7 +3,7 @@
 import json
 import csv
 from functools import lru_cache
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import pandas as pd
 
 
@@ -61,6 +61,21 @@ def load_zipcodes() -> pd.DataFrame:
         DataFrame with columns: zipcode, lat, lon, city, etc.
     """
     return pd.read_csv("Data/zipcodes.csv")
+
+
+@lru_cache(maxsize=1)
+def load_pincode_map() -> Dict[str, Tuple[float, float]]:
+    """
+    Builds a lookup from pincode → (lat, lon).
+    """
+    df = load_zipcodes()
+    mapping: Dict[str, Tuple[float, float]] = {}
+    for _, row in df.iterrows():
+        pincode = str(row["pincode"]).strip()
+        if not pincode:
+            continue
+        mapping[pincode] = (float(row["lat"]), float(row["lon"]))
+    return mapping
 
 
 @lru_cache(maxsize=1)

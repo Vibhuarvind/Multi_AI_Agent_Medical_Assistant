@@ -69,13 +69,19 @@ class TherapyAgent:
                 continue
 
             warn=[]
-            if allergies and any(a.lower() in row['contra_allergy_keywords'].lower() for a in allergies):
+            contra_raw = row.get('contra_allergy_keywords')
+            contra_lower = (
+                contra_raw.lower()
+                if isinstance(contra_raw, str)
+                else ""
+            )
+            if allergies and any(a.lower() in contra_lower for a in allergies):
                 red_flags.append(f"Avoid {row['drug_name']} — patient allergic")
                 logger.info("Rejected %s (SKU: %s) - allergy contraindication", row['drug_name'], row['sku'])
                 continue
 
-            if row['contra_allergy_keywords']!="None":
-                warn.append(f"contains {row['contra_allergy_keywords']}")
+            if contra_lower and contra_lower != "none":
+                warn.append(f"contains {contra_raw}")
 
             d = self.dosage_map.get(row['drug_name'],{"dose":"as directed","freq":"as needed"})
 

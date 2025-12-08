@@ -19,4 +19,5 @@ def test_therapy_supplies_skus_to_pharmacy():
 
     assert "pharmacy_id" in match
     assert match["items"][0]["sku"] in skus
+    assert "price" in match["items"][0]
 

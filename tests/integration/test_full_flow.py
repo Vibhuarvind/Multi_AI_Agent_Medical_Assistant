@@ -27,4 +27,7 @@ def test_orchestrator_runs_end_to_end(tmp_path):
     assert final["therapy_plan"]["otc_options"]
     assert "pharmacy_id" in final["pharmacy_match"]
     assert final["timeline"]
+    assert isinstance(final["timeline"][0], dict)
+    assert final["order_preview"]
+    assert "subtotal" in final["order_preview"]
 

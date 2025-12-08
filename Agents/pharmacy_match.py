@@ -1,6 +1,5 @@
-import math
 from Utils.logger import get_logger
-from Utils.data_loader import load_pharmacies, load_inventory, load_zipcodes
+from Utils.data_loader import load_pharmacies, load_inventory
 
 logger = get_logger(__name__)
 
@@ -8,7 +7,6 @@ class PharmacyAgent:
 
     def __init__(self):
         self.inventory = load_inventory()
-        self.zipcodes = load_zipcodes()
         self.pharmacies = load_pharmacies()
 
     def _distance(self, lat1, lon1, lat2, lon2):
@@ -51,10 +49,11 @@ class PharmacyAgent:
 
             dist = self._distance(user_lat, user_lon, ph["lat"], ph["lon"])
             eta, fee = self._estimate_eta_fee(dist)
+            items = subset[["sku","drug_name","qty","price"]].to_dict(orient="records")
 
             results.append({
                 "pharmacy_id": ph_id,
-                "items": subset[["sku","qty"]].to_dict(orient="records"),
+                "items": items,
                 "eta_min": eta,
                 "delivery_fee": fee,
                 "distance": round(dist,3)
